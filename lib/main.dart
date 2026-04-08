@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/features/presentation/StartForm.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-
-Future<void> main() async{
+Future<void> main() async {
   await dotenv.load(fileName: ".env");
   runApp(const MyApp());
 }
@@ -38,7 +38,8 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      //home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const StartForm(),
     );
   }
 }
