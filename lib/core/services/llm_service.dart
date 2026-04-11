@@ -1,62 +1,46 @@
-import 'package:flutter/services.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class LlmService {
-  late final GenerativeModel _model;
+  late final String _apiKey;
 
-
-  LlmService(){
-    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
-    _model = GenerativeModel(model: 'gemini-3-flash', apiKey: apiKey);
+  LlmService() {
+    _apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
   }
 
-  //Helper
-  Future<String> _loadMdFile(String path)async {
-    try{
-      return await rootBundle.loadString(path);
+  /// Creates a new chat session with a system instruction.
+  ChatSession createChatSession({String? systemPrompt}) {
+    final model = GenerativeModel(
+      model: 'gemini-1.5-flash',
+      apiKey: _apiKey,
+      systemInstruction: systemPrompt != null ? Content.system(systemPrompt) : null,
+    );
+    return model.startChat();
+  }
 
-    } catch (e){
-      return "Error loading $path: $e";
+  /// Sends a message to the AI with an optional system prompt.
+  Future<String> chat(String message, {String? systemPrompt}) async {
+    final model = GenerativeModel(
+      model: 'gemini-1.5-flash',
+      apiKey: _apiKey,
+      systemInstruction: systemPrompt != null ? Content.system(systemPrompt) : null,
+    );
+
+    final content = [Content.text(message)];
+    try {
+      final response = await model.generateContent(content);
+      return response.text ?? "The character is spacing out...";
+    } catch (e) {
+      return "Error: $e";
     }
   }
 
-
-  // main logic for missing player
-  Future<String> getCharacterResponse(String dmInput) async{
-    final identity = await _loadMdFile('assets/agent/personality/identity.md');
-    final sheet = await _loadMdFile('assets/agent/stats/sheet.md');
-    final history = await _loadMdFile('assets/agent/lore/session_log.md');
-
-    final prompt = """
-      SYSTEM INSTRUCTIONS:
-      You are a player character in a D&D game. You are filling in for a player who is away. 
-      Stay in character at all times. Do not narrate for others. 
-      Keep responses brief and conversational, as if spoken at a physical table.
-
-      YOUR PERSONA:
-      $identity
-
-      YOUR ABILITIES:
-      $sheet
-
-      CAMPAIGN MEMORY:
-      $history
-
-      THE SITUATION:
-      The DM just said: "$dmInput"
-
-      How do you respond in character?
-    """;
-
-    final content = [Content.text(prompt)];
-    final response = await _model.generateContent(content);
-
-    return response.text ?? "The character is just spacing out at this point....";
+  // legacy method for compatibility if needed, but updated for local persistence
+  Future<String> getCharacterResponse(String dmInput, {String? systemPrompt}) async {
+    return chat(dmInput, systemPrompt: systemPrompt);
   }
-
-
 }
+
 
 
 
