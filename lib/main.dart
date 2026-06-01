@@ -21,7 +21,7 @@ Future<void> main() async {
     print("🧠 [LIVE TEST] Lore & Character Sheet loaded into system instructions.");
     print("🔌 [LIVE TEST] Connecting to Gemini API...");
 
-    String testPrompt = "A heavy stone trap slams down on your path! You take 6 bludgeoning damage.";
+    String testPrompt = "You see a huge black dragon standing before you, blocking the exit of the cave. It looks at you with burning red eyes and says: 'Who dares enter my lair?' What do you say?";
     print("🎙️  [LIVE TEST] Sending DM Narration: '$testPrompt'");
     
     // Hits the live API

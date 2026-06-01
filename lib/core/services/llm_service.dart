@@ -11,7 +11,7 @@ class LlmService {
   /// Creates a new chat session with a system instruction.
   ChatSession createChatSession({String? systemPrompt}) {
     final model = GenerativeModel(
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.1-flash-lite',
       apiKey: _apiKey,
       systemInstruction: systemPrompt != null ? Content.system(systemPrompt) : null,
     );
@@ -21,7 +21,7 @@ class LlmService {
   /// Sends a message to the AI with an optional system prompt.
   Future<String> chat(String message, {String? systemPrompt}) async {
     final model = GenerativeModel(
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.1-flash-lite',
       apiKey: _apiKey,
       systemInstruction: systemPrompt != null ? Content.system(systemPrompt) : null,
     );
