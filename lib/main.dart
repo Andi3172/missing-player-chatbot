@@ -5,7 +5,7 @@ import 'core/services/persistence_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
+  await dotenv.load(fileName: "../.env");
   await PersistenceManager.init();
   runApp(const MyApp());
 }
