@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/presentation/StartForm.dart';
+import 'package:flutter_application_1/features/presentation/startLayout.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/services/persistence_manager.dart';
 import 'core/logic/session_engine.dart'; // Added engine import
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Load environment variables from the root-mapped asset
   await dotenv.load(fileName: ".env");
   await PersistenceManager.init();
@@ -18,15 +19,21 @@ Future<void> main() async {
   try {
     final session = SessionEngine();
     await session.startCharacterSession();
-    print("🧠 [LIVE TEST] Lore & Character Sheet loaded into system instructions.");
+    print(
+      "🧠 [LIVE TEST] Lore & Character Sheet loaded into system instructions.",
+    );
     print("🔌 [LIVE TEST] Connecting to Gemini API...");
 
-    String testPrompt = "A heavy stone trap slams down on your path! You take 6 bludgeoning damage.";
+    String testPrompt =
+        "A heavy stone trap slams down on your path! You take 6 bludgeoning damage.";
     print("🎙️  [LIVE TEST] Sending DM Narration: '$testPrompt'");
-    
+
     // Hits the live API
-    String aiResponse = await session.handleNarrative(testPrompt, speaker: "DM");
-    
+    String aiResponse = await session.handleNarrative(
+      testPrompt,
+      speaker: "DM",
+    );
+
     print("\n🎭 [LIVE TEST] LIVE CHARACTER RESPONSE:");
     print(aiResponse);
     print("========================================================\n");
@@ -51,7 +58,7 @@ class MyApp extends StatelessWidget {
         // Fixed: Added ColorScheme prefix
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const StartForm(),
+      home: const StartLayout(),
     );
   }
 }
