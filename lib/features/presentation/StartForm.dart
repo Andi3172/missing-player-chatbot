@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/logic/character.dart';
 import 'package:flutter_application_1/features/logic/characterSaveManagement.dart';
+import 'package:flutter_application_1/features/presentation/aiChatPage.dart';
 
 class StartForm extends StatefulWidget {
   const StartForm({Key? key}) : super(key: key);
@@ -170,7 +171,10 @@ class _StartFormState extends State<StartForm> {
 
                   ElevatedButton(
                     onPressed: () {
-                      // Future functionality
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AiChatPage()),
+                      );
                     },
                     child: const Text('Use'),
                   ),
