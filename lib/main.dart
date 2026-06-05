@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/presentation/StartForm.dart';
-import 'package:flutter_application_1/features/presentation/startLayout.dart';
+import 'package:flutter_application_1/features/presentation/StartLayout.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/services/persistence_manager.dart';
 import 'core/logic/session_engine.dart'; // Added engine import
@@ -18,7 +18,7 @@ Future<void> main() async {
   print("\n⚔️  [LIVE TEST] Bootstrapping Engine & Syncing Lore...");
   try {
     final session = SessionEngine();
-    await session.startCharacterSession();
+    await session.startCharacterSession(['Aladar']);
     print(
       "🧠 [LIVE TEST] Lore & Character Sheet loaded into system instructions.",
     );

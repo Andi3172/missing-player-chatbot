@@ -3,16 +3,27 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/logic/character.dart';
 import 'package:flutter_application_1/features/logic/characterSaveManagement.dart';
-import 'package:flutter_application_1/features/presentation/aiChatPage.dart';
+import 'package:flutter_application_1/features/presentation/AiChatPage.dart';
+import 'package:flutter_application_1/core/services/persistence_manager.dart';
+import 'package:flutter_application_1/core/logic/session_engine.dart';
 
 class StartForm extends StatefulWidget {
-  const StartForm({Key? key}) : super(key: key);
+  final VoidCallback? onCharacterSaved;
+  final VoidCallback? onUseSelected;
+  final int selectedCharactersCount;
+
+  const StartForm({
+    Key? key,
+    this.onCharacterSaved,
+    this.onUseSelected,
+    required this.selectedCharactersCount,
+  }) : super(key: key);
 
   @override
-  State<StartForm> createState() => _StartFormState();
+  State<StartForm> createState() => StartFormState();
 }
 
-class _StartFormState extends State<StartForm> {
+class StartFormState extends State<StartForm> {
   final _formKey = GlobalKey<FormState>();
 
   final _characterNameController = TextEditingController();
@@ -31,7 +42,7 @@ class _StartFormState extends State<StartForm> {
   final _motivationController = TextEditingController();
   final _knownNpcsController = TextEditingController();
 
-  Future<void> _loadCharacter(File file) async {
+  Future<void> loadCharacter(File file) async {
     final text = await file.readAsString();
 
     final character = Character.fromFileContents(text);
@@ -69,7 +80,7 @@ class _StartFormState extends State<StartForm> {
     });
   }
 
-  Character _buildCharacter() {
+  Character buildCharacter() {
     return Character(
       characterName: _characterNameController.text,
       race: _raceController.text,
@@ -128,7 +139,6 @@ class _StartFormState extends State<StartForm> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      //appBar: AppBar(title: const Text('Character Creation')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -160,9 +170,22 @@ class _StartFormState extends State<StartForm> {
                 children: [
                   ElevatedButton(
                     onPressed: () async {
-                      //await saveCharacter(_buildCharacter());
-
-                      //await _refreshCharacterList();
+                      final name = _characterNameController.text.trim();
+                      if (name.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a character name to save.')),
+                        );
+                        return;
+                      }
+                      await saveCharacter(buildCharacter());
+                      if (widget.onCharacterSaved != null) {
+                        widget.onCharacterSaved!();
+                      }
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Character "$name" saved successfully!')),
+                        );
+                      }
                     },
                     child: const Text('Save'),
                   ),
@@ -170,13 +193,10 @@ class _StartFormState extends State<StartForm> {
                   const SizedBox(width: 16),
 
                   ElevatedButton(
-                    onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const AiChatPage()),
-                      );
-                    },
-                    child: const Text('Use'),
+                    onPressed: widget.onUseSelected,
+                    child: Text(widget.selectedCharactersCount > 0
+                        ? 'Use Selected (${widget.selectedCharactersCount})'
+                        : 'Use Current'),
                   ),
                 ],
               ),

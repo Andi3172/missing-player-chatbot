@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -10,21 +11,28 @@ import 'package:flutter_application_1/core/logic/session_engine.dart';
 
 void main() async {
   // 1. Environment Setup
-  WidgetsFlutterBinding.ensureInitialized();
+  TestWidgetsFlutterBinding.ensureInitialized();
 
   test('Engine Bench Integration Test', () async {
     print('\n======================================================');
     print('🗡️  MISSING PLAYER CHATBOT: ENGINE INTEGRATION TEST 🗡️');
     print('======================================================\n');
 
+    // Mock path provider plugin channel
+    const MethodChannel channel = MethodChannel('plugins.flutter.io/path_provider');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
+      return '.'; // Use current directory for mock path
+    });
+
     try {
-    // Attempt to load .env for the Gemini API key
-    try {
-      await dotenv.load(fileName: ".env");
-      print('✅ Loaded .env file');
-    } catch (e) {
-      print('⚠️  Warning: Could not load .env file. API key might be missing.');
-    }
+      // Attempt to load .env for the Gemini API key
+      try {
+        await dotenv.load(fileName: ".env");
+        print('✅ Loaded .env file');
+      } catch (e) {
+        print('⚠️  Warning: Could not load .env file. API key might be missing.');
+      }
 
     // Phase 1: Bootstrap Initialization
     print('\n▶️  PHASE 1: Bootstrap Initialization');
@@ -39,7 +47,7 @@ void main() async {
     final sessionEngine = SessionEngine();
     final campaignManager = CampaignManager();
     print('⏳ Initializing Gemini session and feeding core system instructions...');
-    await sessionEngine.startCharacterSession();
+    await sessionEngine.startCharacterSession(['Aladar']);
     print('✅ SessionEngine instantiated and startCharacterSession() complete.');
     print('✅ Lore and character sheet successfully fed into Gemini.');
 
@@ -66,7 +74,7 @@ void main() async {
     print('⏳ Waiting 2 seconds to allow background streams/parsers to settle...');
     await Future.delayed(const Duration(seconds: 2));
     
-    final conditions = campaignManager.activeConditions;
+    final conditions = campaignManager.getActiveConditions('Aladar');
     print('🔍 Active Conditions Snapshot: ${conditions.isEmpty ? "None" : conditions.join(", ")}');
     print('🔍 Current Intent: ${sessionEngine.currentIntent.value ?? "None"}');
     print('✅ Background tasks visually verified.');

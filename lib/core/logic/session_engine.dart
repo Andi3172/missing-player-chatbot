@@ -1,75 +1,92 @@
-import 'package:flutter/foundation.dart'; // Added for ValueNotifier
+import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../services/campaign_manager.dart';
 import '../services/llm_service.dart';
 import '../services/file_service.dart';
 
 class SessionEngine {
+  static final SessionEngine _instance = SessionEngine._internal();
+  factory SessionEngine() => _instance;
+  SessionEngine._internal();
+
   final CampaignManager _campaignManager = CampaignManager();
   final LlmService _llmService = LlmService();
   final FileService _fileService = FileService();
 
-  ChatSession? _chatSession;
-  final List<String> _narrativeHistory = [];
-  static const int _maxHistory = 5;
+  final List<String> _activeCharacterNames = [];
+  List<String> get activeCharacterNames => List.unmodifiable(_activeCharacterNames);
+
+  final Map<String, ChatSession> _chatSessions = {};
   static const int _wordLimit = 2000;
 
   /// Notifier to identify when the DM is asking for a check or roll.
   final ValueNotifier<String?> currentIntent = ValueNotifier<String?>(null);
 
-  /// Starts a character session by building the system prompt and initializing Gemini.
-  Future<void> startCharacterSession() async {
-    final systemPrompt = await _campaignManager.buildFullSystemPrompt();
-    
-    // Initialize the Gemini chat with the entire lore in systemInstruction.
-    _chatSession = _llmService.createChatSession(systemPrompt: systemPrompt);
-    _narrativeHistory.clear();
+  /// Starts multi-character sessions by compiling prompts and initializing Gemini instances.
+  Future<void> startCharacterSession(List<String> characterNames) async {
+    _activeCharacterNames.clear();
+    _activeCharacterNames.addAll(characterNames);
+    _chatSessions.clear();
+
+    for (final name in characterNames) {
+      final systemPrompt = await _campaignManager.buildCharacterSystemPrompt(name);
+      final session = _llmService.createChatSession(systemPrompt: systemPrompt);
+      _chatSessions[name] = session;
+    }
   }
 
-  /// Handles DM's narration, sends it to the model, and manages history.
+  /// Handles DM narration, sequential character prompts, and log writes.
   Future<String> handleNarrative(String bigPrompt, {String speaker = 'DM'}) async {
-    if (_chatSession == null) {
-      await startCharacterSession();
+    if (_activeCharacterNames.isEmpty) {
+      return "No active characters selected.";
     }
 
-    // Keep history limited to the last 5 'Big Prompts'
+    // Append DM/Player input once to the shared campaign log
     final taggedPrompt = '[$speaker]: $bigPrompt';
-    _narrativeHistory.add(taggedPrompt);
-    if (_narrativeHistory.length > _maxHistory) {
-      _narrativeHistory.removeAt(0);
-    }
-
-    // Append to local session_log.md for permanent storage with speaker tag
     await _campaignManager.appendToLog(taggedPrompt);
 
-    // Trigger background intent analysis to detect if rolls are needed
+    // Trigger intent analysis once
     analyzeIntent(bigPrompt);
 
-    // Trigger background state and condition update based on DM narration
-    // We don't await this to keep it "background" and responsive
-    _campaignManager.updateStateFromNarration(bigPrompt).catchError((e) {
-      print('Background update failed: $e');
-    });
+    final List<String> characterResponses = [];
 
-    // Check for context overflow and summarize if necessary
-    summarizeOldHistory().catchError((e) {
-      print('Background summarization failed: $e');
-    });
+    // Prompt each character sequentially
+    for (final name in _activeCharacterNames) {
+      // Background stat extraction for this specific character
+      _campaignManager.updateCharacterStateFromNarration(bigPrompt, name).catchError((e) {
+        print('Background state update failed for $name: $e');
+      });
 
-    try {
-      final response = await _chatSession!.sendMessage(Content.text(bigPrompt));
-      final responseText = response.text ?? "The character is spacing out...";
-      
-      // Also log the AI's response with speaker tag
-      await _campaignManager.appendToLog('[Character]: $responseText');
-      
-      return responseText;
-    } catch (e) {
-      return "Error in narrative: $e";
+      // Background logs summarization if context limits are exceeded
+      summarizeOldHistory(name).catchError((e) {
+        print('Background summarization failed for $name: $e');
+      });
+
+      try {
+        // Build updated prompt with latest stats and session history
+        final systemPrompt = await _campaignManager.buildCharacterSystemPrompt(name);
+        final session = _llmService.createChatSession(systemPrompt: systemPrompt);
+        _chatSessions[name] = session; // update cache
+
+        final response = await session.sendMessage(Content.text(bigPrompt));
+        final responseText = response.text ?? "spaces out...";
+
+        // Append this character's dialogue to the shared session log
+        final taggedResponse = '[$name]: $responseText';
+        await _campaignManager.appendToLog(taggedResponse);
+
+        characterResponses.add('$name: $responseText');
+      } catch (e) {
+        final errorResponse = '[$name]: Error: $e';
+        await _campaignManager.appendToLog(errorResponse);
+        characterResponses.add('$name: Error getting response: $e');
+      }
     }
+
+    return characterResponses.join('\n\n');
   }
 
-  /// Analyzes DM narration for rolls, checks, or saving throws.
+  /// Analyzes narration for roll/check intents.
   Future<void> analyzeIntent(String narration) async {
     final intentPrompt = '''
 Analyze this D&D narration. Is a roll or specific action required from the character? 
@@ -90,7 +107,6 @@ $narration
         currentIntent.value = trimmed;
         print('Detected Character Intent: $trimmed');
         
-        // Reset intent after a short period (e.g., 60s) or until the next turn
         Future.delayed(const Duration(minutes: 1), () {
           if (currentIntent.value == trimmed) currentIntent.value = null;
         });
@@ -102,12 +118,9 @@ $narration
     }
   }
 
-  /// Optional: Get the current narrative history
-  List<String> get narrativeHistory => List.unmodifiable(_narrativeHistory);
-
-  /// Summarizes the oldest 70% of the log if it exceeds the word limit.
-  Future<void> summarizeOldHistory() async {
-    final log = await _fileService.readLocalFile('session_log.md');
+  /// Summarizes character history if memory threshold is reached.
+  Future<void> summarizeOldHistory(String name) async {
+    final log = await _fileService.readLocalFile('characters/$name/current_session.md').catchError((_) => '');
     final words = log.split(RegExp(r'\s+'));
 
     if (words.length > _wordLimit) {
@@ -127,16 +140,56 @@ $oldHistory
       try {
         final summaryResponse = await _llmService.chat(summaryPrompt);
         
-        // Save the new summary
-        await _fileService.writeLocalFile('summary.md', summaryResponse.trim());
-        
-        // Overwrite log with the remaining 30% to keep context window small
-        await _fileService.writeLocalFile('session_log.md', remainingHistory.trim());
-        
-        print('Campaign history summarized and purged. Persistent core saved to summary.md');
+        await _fileService.writeLocalFile('characters/$name/summary.md', summaryResponse.trim());
+        await _fileService.writeLocalFile('characters/$name/current_session.md', remainingHistory.trim());
+        print('Campaign history summarized for $name.');
       } catch (e) {
-        print('Error during summarization: $e');
+        print('Error during summarization for $name: $e');
       }
     }
   }
+
+  Stream<void> get onStateChanged => _campaignManager.onStateChanged;
+  List<String> getActiveConditions(String name) => _campaignManager.getActiveConditions(name);
+
+  Future<List<Map<String, String>>> getSessionMessages() => _campaignManager.getSessionMessages();
+  Future<String> getCharacterSheet(String name) => _fileService.readLocalFile('characters/$name/sheet.md');
+
+  Future<void> undoLastStatChange(String name) => _campaignManager.undoLastStatChange(name);
+  Future<void> exportCampaign() => _campaignManager.exportCampaign();
+  Future<void> importCampaign() => _campaignManager.importCampaign();
+
+  Future<void> updateCharacter(
+    String name, {
+    required String race,
+    required String level,
+    required String charClass,
+    required String abilities,
+    required String armor,
+    required String weapons,
+    required String items,
+    required String voice,
+    required String personality,
+    required String fears,
+    required String relationships,
+    required String role,
+    required String motivation,
+    required String npcs,
+  }) => _campaignManager.updateCharacterFiles(
+    name,
+    race: race,
+    level: level,
+    charClass: charClass,
+    abilities: abilities,
+    armor: armor,
+    weapons: weapons,
+    items: items,
+    voice: voice,
+    personality: personality,
+    fears: fears,
+    relationships: relationships,
+    role: role,
+    motivation: motivation,
+    npcs: npcs,
+  );
 }

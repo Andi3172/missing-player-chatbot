@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 class FileService {
@@ -15,8 +14,11 @@ class FileService {
 
   /// Gets the local documents directory path.
   Future<String> get _localPath async {
-    final directory = await getApplicationDocumentsDirectory();
-    return directory.path;
+    final dir = Directory('${Directory.current.path}/Saved_Prompts');
+    if (!dir.existsSync()) {
+      dir.createSync(recursive: true);
+    }
+    return dir.path;
   }
 
   /// Gets a [File] object for a given filename in the local documents directory.
@@ -44,6 +46,10 @@ class FileService {
   Future<void> writeLocalFile(String fileName, String content) async {
     try {
       final file = await _getLocalFile(fileName);
+      final parent = file.parent;
+      if (!await parent.exists()) {
+        await parent.create(recursive: true);
+      }
       await file.writeAsString(content);
     } catch (e) {
       throw Exception('Failed to write local file: $fileName, error: $e');
